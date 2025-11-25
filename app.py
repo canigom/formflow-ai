@@ -22,10 +22,17 @@ st.markdown("""
 """)
 with st.sidebar:
     st.header("⚙️ Einstellungen")
-    api_key_input = st.text_input("Google Gemini API-Schlüssel", type="password")
-    st.info("Sie erhalten Ihren API-Schlüssel im Google AI Studio.")
+
+    if "GOOGLE_API_KEY" in st.secrets:
+        api_key_input = st.secrets["GOOGLE_API_KEY"]
+        st.success("✅ API-Key sicher geladen.") # Anahtar yüklendi mesajı
+    else:
+        api_key_input = st.text_input("Google Gemini API-Schlüssel", type="password")
+        st.info("Bitte fügen Sie Ihren Schlüssel in den Streamlit Secrets hinzu.")
+
     st.divider()
     st.write("Entwickler: FormFlow Team")
+
     
 # --- FUNKTIONEN (FONKSİYONLAR) ---
 def calculate_angle(a, b, c):
@@ -168,6 +175,7 @@ if uploaded_file is not None:
                         st.error(f"KI-Verbindungsfehler: {e}")
             else:
                 st.warning("⚠️ Bitte API-Key eingeben.")
+
 
 
 
