@@ -148,17 +148,7 @@ if uploaded_file is not None:
                         # --- AKILLI MODEL SEÇİMİ (YENİ KISIM) ---
                         # Sırayla modelleri dener, hangisi çalışırsa onu kullanır.
                         model = None
-                        try:
-                            # 1. Deneme: En yeni ve hızlı model
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                        except:
-                            try:
-                                # 2. Deneme: Alternatif isim
-                                model = genai.GenerativeModel('models/gemini-1.5-flash')
-                            except:
-                                # 3. Deneme: Eski ama sağlam model (Yedek)
-                                model = genai.GenerativeModel('gemini-pro')
-                        
+                        model = genai.GenerativeModel('gemini-1.5-flash')
                         # Eğer hiçbir model çalışmazsa hata ver
                         if model is None:
                             st.error("Kein passendes KI-Modell gefunden.")
@@ -178,8 +168,9 @@ if uploaded_file is not None:
                             st.markdown(response.text)
                             
                     except Exception as e:
-                        st.error(f"KI-Verbindungsfehler: {e}")
+                        st.error(f"KI-Verbindungsfehler xyz: {e}")
             else:
                 st.warning("⚠️ Bitte API-Key eingeben.")
+
 
 
