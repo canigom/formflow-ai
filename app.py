@@ -8,27 +8,31 @@ import google.generativeai as genai
 from PIL import Image
 import os
 
-# --- SAYFA AYARLARI ---
+# --- SEITENEINSTELLUNGEN (SAYFA AYARLARI) ---
 st.set_page_config(
-    page_title="FormFlow AI - Akıllı Antrenör",
+    page_title="FormFlow AI - Der smarte Trainer",
     page_icon="🏋️",
     layout="wide"
 )
 
-# --- BAŞLIK VE AÇIKLAMA ---
+# --- TITEL UND BESCHREIBUNG (BAŞLIK VE AÇIKLAMA) ---
 st.title("🏋️ FormFlow AI")
 st.markdown("""
-**Yapay Zeka Destekli Biyomekanik Hareket Analizi** Videonuzu yükleyin, yapay zeka formunuzu analiz etsin ve size özel tavsiyeler versin.
+**KI-gestützte biomechanische Bewegungsanalyse** Laden Sie Ihr Video hoch, lassen Sie Ihre Form von der Künstlichen Intelligenz analysieren und erhalten Sie individuelles Feedback zur Verletzungsprävention.
 """)
 
 # --- SIDEBAR (YAN MENÜ) ---
 with st.sidebar:
-    st.header("⚙️ Ayarlar")
-    api_key = "AIzaSyDucpNYIaL-LR57PjZWrLNDE4KtqAsS9fQ"
+    st.header("⚙️ Einstellungen")
+    # API Key Input
+    api_key_input = st.text_input("Google Gemini API-Schlüssel", type="password")
+    
+    st.info("Sie erhalten Ihren API-Schlüssel im Google AI Studio.")
     st.divider()
-    st.write("Geliştirici: FormFlow Team")
+    st.write("Entwickler: FormFlow Team")
 
-# --- FONKSİYONLAR ---
+
+# --- FUNKTIONEN (FONKSİYONLAR) ---
 def calculate_angle(a, b, c):
     a = np.array(a)
     b = np.array(b)
@@ -50,18 +54,18 @@ def process_video(video_path):
     squat_count = 0
     stage = None
     
-    # Progress Bar (İlerleme Çubuğu)
+    # Progress Bar
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if total_frames == 0: total_frames = 1
     
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
             
-        # Görüntü işleme
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(image)
         
@@ -75,7 +79,7 @@ def process_video(video_path):
             angle_history.append(angle)
             frame_indices.append(frame_count)
             
-            # Squat Sayacı
+            # Squat Logic
             if angle > 160:
                 stage = "UP"
             if angle < 90 and stage == 'UP':
@@ -86,10 +90,9 @@ def process_video(video_path):
             pass
             
         frame_count += 1
-        # İlerlemeyi güncelle
         if frame_count % 10 == 0:
             progress_bar.progress(min(frame_count / total_frames, 1.0))
-            status_text.text(f"Video İşleniyor... Kare: {frame_count}")
+            status_text.text(f"Video wird verarbeitet... Frame: {frame_count}")
 
     cap.release()
     progress_bar.empty()
@@ -97,64 +100,76 @@ def process_video(video_path):
     
     return angle_history, frame_indices, squat_count
 
-# --- ANA AKIŞ ---
-uploaded_file = st.file_uploader("Analiz edilecek videoyu seçin (MP4)", type=["mp4", "mov"])
+# --- HAUPTABLAUF (ANA AKIŞ) ---
+uploaded_file = st.file_uploader("Wählen Sie ein Video zur Analyse (MP4/MOV)", type=["mp4", "mov"])
 
 if uploaded_file is not None:
-    # Videoyu geçici dosyaya kaydet
-    tfile = tempfile.NamedTemporaryFile(delete=False) 
+    tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') 
     tfile.write(uploaded_file.read())
     video_path = tfile.name
     
-    st.video(video_path) # Videoyu göster
+    st.video(video_path)
     
-    if st.button("🚀 Analizi Başlat"):
-        with st.spinner('Yapay Zeka Biyomekaniği Hesaplanıyor...'):
+    if st.button("🚀 Analyse starten"):
+        with st.spinner('KI berechnet Biomechanik...'):
             angles, frames, count = process_video(video_path)
             
-            st.success("Analiz Tamamlandı!")
+            st.success("Analyse abgeschlossen!")
             
-            # 1. Metrikler
+            # 1. Metriken (Metrikler)
             col1, col2 = st.columns(2)
-            col1.metric("Toplam Tekrar", f"{count}", "Squat")
-            col1.metric("Minimum Açı", f"{int(min(angles))}°", "Derinlik")
+            col1.metric("Wiederholungen gesamt", f"{count}", "Squats")
+            if angles:
+                col1.metric("Minimale Tiefe (Winkel)", f"{int(min(angles))}°", "Grad")
             
-            # 2. Grafik Çizme
+            # 2. Grafik (Grafik Çizimi)
             fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(frames, angles, label='Diz Açısı', color='#007acc')
-            ax.axhline(y=90, color='green', linestyle='--', label='Hedef (90°)')
-            ax.axhline(y=160, color='red', linestyle='--', label='Başlangıç (160°)')
-            ax.set_title("Hareket Analiz Grafiği")
-            ax.set_xlabel("Zaman")
-            ax.set_ylabel("Derece")
+            ax.plot(frames, angles, label='Kniewinkel', color='#007acc')
+            ax.axhline(y=90, color='green', linestyle='--', label='Ziel (90°)')
+            ax.axhline(y=160, color='red', linestyle='--', label='Start (160°)')
+            ax.set_title("Bewegungsanalyse-Diagramm")
+            ax.set_xlabel("Zeit (Frames)")
+            ax.set_ylabel("Winkel (Grad)")
             ax.legend()
             ax.grid(True, alpha=0.3)
             
-            st.pyplot(fig) # Grafiği ekrana bas
+            st.pyplot(fig)
             
-            # Grafiği kaydet (Gemini için)
             plt.savefig("temp_graph.png")
             
-            # 3. Gemini Yorumu
-            if api_key:
-                st.subheader("🤖 Yapay Zeka Koç Tavsiyesi")
-                with st.spinner('Gemini Grafiği Yorumluyor...'):
+            # 3. Gemini Feedback
+            final_api_key = api_key_input
+            
+            if final_api_key:
+                st.subheader("🤖 KI-Coach Empfehlung")
+                with st.spinner('Gemini analysiert das Diagramm...'):
                     try:
-                        genai.configure(api_key=api_key)
-                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        genai.configure(api_key=final_api_key)
+                        
+                        # Model Fallback
+                        try:
+                            model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
+                        except:
+                            model = genai.GenerativeModel('gemini-1.5-flash')
                         
                         img = Image.open("temp_graph.png")
+                        
+                        # ALMANCA PROMPT (KOMUT)
                         prompt = f"""
-                        Sen profesyonel bir spor antrenörüsün. Bu grafik bir sporcunun Squat performansını gösteriyor.
-                        Toplam {count} tekrar yapmış. Grafiğe bakarak:
-                        1. Derinlik analizi yap (90 dereceye inebilmiş mi?).
-                        2. Yorulma belirtisi var mı?
-                        3. Kısa ve motive edici bir tavsiye ver.
-                        Türkçe cevapla.
+                        Du bist ein professioneller Sporttrainer und Biomechanik-Experte.
+                        Diese Grafik zeigt die Leistung eines Athleten bei Kniebeugen (Squats).
+                        Der Athlet hat insgesamt {count} Wiederholungen gemacht.
+                        
+                        Analysiere die Grafik und antworte auf DEUTSCH:
+                        1. Tiefenanalyse: Wurde der 90-Grad-Winkel erreicht? (Vergleiche blaue Linie mit grüner Linie).
+                        2. Ermüdung: Gibt es Anzeichen dafür, dass die Form mit der Zeit schlechter wurde?
+                        3. Fazit: Gib einen kurzen, motivierenden Rat zur Verbesserung der Technik.
+                        
+                        Bitte formatiere die Antwort schön mit Überschriften.
                         """
                         response = model.generate_content([prompt, img])
                         st.markdown(response.text)
                     except Exception as e:
-                        st.error(f"Yapay Zeka Hatası: {e}")
+                        st.error(f"KI-Fehler: {e}")
             else:
-                st.warning("Detaylı yapay zeka yorumu için lütfen sol menüden API Key giriniz.")
+                st.warning("⚠️ Für detailliertes KI-Feedback geben Sie bitte den API-Schlüssel im linken Menü ein.")
