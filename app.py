@@ -20,7 +20,13 @@ st.title("🏋️ FormFlow AI")
 st.markdown("""
 **KI-gestützte biomechanische Bewegungsanalyse** Laden Sie Ihr Video hoch, lassen Sie Ihre Form von der Künstlichen Intelligenz analysieren und erhalten Sie individuelles Feedback zur Verletzungsprävention.
 """)
-
+with st.sidebar:
+    st.header("⚙️ Einstellungen")
+    api_key_input = st.text_input("Google Gemini API-Schlüssel", type="password")
+    st.info("Sie erhalten Ihren API-Schlüssel im Google AI Studio.")
+    st.divider()
+    st.write("Entwickler: FormFlow Team")
+    
 # --- FUNKTIONEN (FONKSİYONLAR) ---
 def calculate_angle(a, b, c):
     a = np.array(a)
@@ -163,6 +169,7 @@ if uploaded_file is not None:
                         st.error(f"KI-Verbindungsfehler: {e}")
             else:
                 st.warning("⚠️ Bitte API-Key eingeben.")
+
 
 
 
