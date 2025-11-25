@@ -145,10 +145,7 @@ if uploaded_file is not None:
                         genai.configure(api_key=final_api_key)
                         
                         # Model Fallback
-                        try:
-                            model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
-                        except:
-                            model = genai.GenerativeModel('gemini-1.5-flash')
+                        model = genai.GenerativeModel('gemini-1.5-flash')                        
                         
                         img = Image.open("temp_graph.png")
                         
@@ -171,4 +168,5 @@ if uploaded_file is not None:
                         st.error(f"KI-Fehler: {e}")
             else:
                 st.warning("⚠️ Für detailliertes KI-Feedback geben Sie bitte den API-Schlüssel im linken Menü ein.")
+
 
