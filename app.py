@@ -128,7 +128,7 @@ if uploaded_file is not None:
             
             # 3. Gemini Feedback
 # 3. Gemini Feedback
-            final_api_key = api_key_input
+            final_api_key = GOOGLE_API_KEY
             
             if final_api_key:
                 st.subheader("🤖 KI-Coach Empfehlung")
@@ -162,6 +162,7 @@ if uploaded_file is not None:
                         st.error(f"KI-Verbindungsfehler: {e}")
             else:
                 st.warning("⚠️ Bitte API-Key eingeben.")
+
 
 
 
