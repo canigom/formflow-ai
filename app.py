@@ -25,11 +25,9 @@ st.markdown("""
 with st.sidebar:
     st.header("⚙️ Einstellungen")
     # API Key Input
-    api_key_input = st.text_input("Google Gemini API-Schlüssel", type="password")
-    
-    st.info("Sie erhalten Ihren API-Schlüssel im Google AI Studio.")
-    st.divider()
+    api_key_input = "AIzaSyDucpNYIaL-LR57PjZWrLNDE4KtqAsS9fQ"
     st.write("Entwickler: FormFlow Team")
+    st.write("Founder: Can Evli")
 
 
 # --- FUNKTIONEN (FONKSİYONLAR) ---
@@ -173,3 +171,4 @@ if uploaded_file is not None:
                         st.error(f"KI-Fehler: {e}")
             else:
                 st.warning("⚠️ Für detailliertes KI-Feedback geben Sie bitte den API-Schlüssel im linken Menü ein.")
+
