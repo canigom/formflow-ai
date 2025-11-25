@@ -21,22 +21,6 @@ st.markdown("""
 **KI-gestützte biomechanische Bewegungsanalyse** Laden Sie Ihr Video hoch, lassen Sie Ihre Form von der Künstlichen Intelligenz analysieren und erhalten Sie individuelles Feedback zur Verletzungsprävention.
 """)
 
-with st.sidebar:
-    st.header("⚙️ Einstellungen")
-    
-    # API Anahtarını burada tanımlıyoruz: 'api_key_input'
-    # NOT: Eğer Streamlit Secrets kullanıyorsan oradan çekebilirsin.
-    # Şimdilik senin verdiğin sabit anahtarı kullanıyoruz (Private Repo için uygundur).
-    if "GOOGLE_API_KEY" in st.secrets:
-        api_key_input = st.secrets["GOOGLE_API_KEY"]
-        st.success("API-Key aus System geladen")
-    else:
-        # Hata almamak için buraya senin anahtarını veya boş bir string koyuyoruz
-        # Güvenlik için bu anahtarı GitHub'da 'Public' yapma!
-        api_key_input = "AIzaSyDucpNYIaL-LR57PjZWrLNDE4KtqAsS9fQ"
-st.divider()
-    st.write("Entwickler: FormFlow Team")        
-
 # --- FUNKTIONEN (FONKSİYONLAR) ---
 def calculate_angle(a, b, c):
     a = np.array(a)
@@ -178,6 +162,7 @@ if uploaded_file is not None:
                         st.error(f"KI-Verbindungsfehler: {e}")
             else:
                 st.warning("⚠️ Bitte API-Key eingeben.")
+
 
 
 
