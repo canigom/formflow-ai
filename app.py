@@ -136,6 +136,7 @@ if uploaded_file is not None:
             plt.savefig("temp_graph.png")
             
             # 3. Gemini Feedback
+# 3. Gemini Feedback
             final_api_key = api_key_input
             
             if final_api_key:
@@ -144,29 +145,41 @@ if uploaded_file is not None:
                     try:
                         genai.configure(api_key=final_api_key)
                         
-                        # Model Fallback
-                        model = genai.GenerativeModel('gemini-1.5-flash')                        
+                        # --- AKILLI MODEL SEÇİMİ (YENİ KISIM) ---
+                        # Sırayla modelleri dener, hangisi çalışırsa onu kullanır.
+                        model = None
+                        try:
+                            # 1. Deneme: En yeni ve hızlı model
+                            model = genai.GenerativeModel('gemini-1.5-flash')
+                        except:
+                            try:
+                                # 2. Deneme: Alternatif isim
+                                model = genai.GenerativeModel('models/gemini-1.5-flash')
+                            except:
+                                # 3. Deneme: Eski ama sağlam model (Yedek)
+                                model = genai.GenerativeModel('gemini-pro')
                         
-                        img = Image.open("temp_graph.png")
-                        
-                        # ALMANCA PROMPT (KOMUT)
-                        prompt = f"""
-                        Du bist ein professioneller Sporttrainer und Biomechanik-Experte.
-                        Diese Grafik zeigt die Leistung eines Athleten bei Kniebeugen (Squats).
-                        Der Athlet hat insgesamt {count} Wiederholungen gemacht.
-                        
-                        Analysiere die Grafik und antworte auf DEUTSCH:
-                        1. Tiefenanalyse: Wurde der 90-Grad-Winkel erreicht? (Vergleiche blaue Linie mit grüner Linie).
-                        2. Ermüdung: Gibt es Anzeichen dafür, dass die Form mit der Zeit schlechter wurde?
-                        3. Fazit: Gib einen kurzen, motivierenden Rat zur Verbesserung der Technik.
-                        
-                        Bitte formatiere die Antwort schön mit Überschriften.
-                        """
-                        response = model.generate_content([prompt, img])
-                        st.markdown(response.text)
+                        # Eğer hiçbir model çalışmazsa hata ver
+                        if model is None:
+                            st.error("Kein passendes KI-Modell gefunden.")
+                        else:
+                            img = Image.open("temp_graph.png")
+                            
+                            prompt = f"""
+                            Du bist ein professioneller Sporttrainer.
+                            Diese Grafik zeigt die Kniebeugen (Squats) Leistung. Total: {count} Wiederholungen.
+                            
+                            Analysiere auf DEUTSCH:
+                            1. Wurde die 90-Grad-Tiefe erreicht? (Blaue vs Grüne Linie).
+                            2. Gibt es Ermüdungserscheinungen?
+                            3. Kurzer, motivierender Rat.
+                            """
+                            response = model.generate_content([prompt, img])
+                            st.markdown(response.text)
+                            
                     except Exception as e:
-                        st.error(f"KI-Fehler: {e}")
+                        st.error(f"KI-Verbindungsfehler: {e}")
             else:
-                st.warning("⚠️ Für detailliertes KI-Feedback geben Sie bitte den API-Schlüssel im linken Menü ein.")
+                st.warning("⚠️ Bitte API-Key eingeben.")
 
 
