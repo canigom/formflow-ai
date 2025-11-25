@@ -1,3 +1,5 @@
+FormFlow AI
+
 Technische Fehler und Haltungsdefizite im individuellen Sporttraining können langfristig zu schwerwiegenden orthopädischen Verletzungen führen. Dieses Projekt stellt ein KI-gestütztes Bildverarbeitungssystem vor, das die Übungsformen von Sportlern analysiert, ohne auf teure Sensoren oder Wearables angewiesen zu sein.
 
 Die Software wurde mit der Programmiersprache Python und der Google MediaPipe-Bibliothek entwickelt. Sie modelliert das Skelettsystem des Nutzers in Echtzeit über eine Standard-Webcam. Das System berechnet mittels trigonometrischer Methoden die Winkel zwischen kritischen Gelenkpunkten (wie Schulter, Hüfte und Knie). Die ermittelten Daten werden anschließend mit korrekten biomechanischen Referenzwerten verglichen.
