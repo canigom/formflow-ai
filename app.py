@@ -10,36 +10,33 @@ import os
 
 # --- SEITENEINSTELLUNGEN ---
 st.set_page_config(
-    page_title="FormFlow AI - Auto Trainer",
-    page_icon="🧠",
+    page_title="FormFlow AI - Pro Analyst",
+    page_icon="🔬",
     layout="wide"
 )
 
-# --- TITEL UND BESCHREIBUNG ---
-st.title("🧠 FormFlow AI: Auto-Modus")
+# --- BAŞLIK ---
+st.title("🔬 FormFlow AI: Professionelle Analyse")
 st.markdown("""
-**Vollautomatische biomechanische Analyse:** Laden Sie ein Video hoch – die KI erkennt automatisch Ihre Übung und analysiert Ihre Technik.
+**Deep-Dive Biomechanik:** Das System kombiniert Computer-Vision-Daten mit Generativer KI für ein Feedback auf Profi-Niveau.
 """)
 
-# --- SIDEBAR (EINSTELLUNGEN) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Einstellungen")
     
-    # API-KEY VERWALTUNG
     if "GOOGLE_API_KEY" in st.secrets:
         api_key_input = st.secrets["GOOGLE_API_KEY"]
-        st.success("✅ API-Key vom System geladen.")
+        st.success("✅ API-Key geladen.")
     else:
         api_key_input = st.text_input("Google Gemini API-Schlüssel", type="password")
-        st.info("Manuelle Eingabe aktiv.")
     
     st.divider()
-    st.info("ℹ️ Das System erkennt die Übung automatisch anhand Ihrer Körperhaltung (Stehend/Liegend).")
-    st.write("Entwickler: FormFlow Team")
+    st.info("Das System analysiert nun auch Konsistenz, Tempo und Symmetrie.")
+    st.write("Dev: FormFlow Team")
 
-# --- FUNKTIONEN ---
+# --- FONKSİYONLAR ---
 def calculate_angle(a, b, c):
-    """Berechnet den Winkel zwischen 3 Punkten"""
     a = np.array(a)
     b = np.array(b)
     c = np.array(c)
@@ -50,39 +47,24 @@ def calculate_angle(a, b, c):
     return angle
 
 def detect_exercise_type(landmarks):
-    """
-    Schätzt die Übung basierend auf dem Seitenverhältnis des Körpers.
-    """
-    # Alle x- und y-Koordinaten abrufen
     x_coords = [lm.x for lm in landmarks]
     y_coords = [lm.y for lm in landmarks]
-    
-    min_x, max_x = min(x_coords), max(x_coords)
-    min_y, max_y = min(y_coords), max(y_coords)
-    
-    width = max_x - min_x
-    height = max_y - min_y
-    
-    # WENN HÖHE > BREITE --> SQUAT (Stehend)
-    # WENN BREITE > HÖHE --> PUSH-UP (Liegend)
-    if height > width:
-        return "Squat"
-    else:
-        return "Push-Up"
+    width = max(x_coords) - min(x_coords)
+    height = max(y_coords) - min(y_coords)
+    return "Squat" if height > width else "Push-Up"
 
 def process_video(video_path):
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
     cap = cv2.VideoCapture(video_path)
     
-    angle_history = []
-    frame_indices = []
-    frame_count = 0
-    count = 0
-    stage = None
+    # İstatistikleri daha detaylı tutuyoruz
+    stats = {
+        "Squat": {"count": 0, "angles": [], "frames": [], "stage": None, "min_angles": []},
+        "Push-Up": {"count": 0, "angles": [], "frames": [], "stage": None, "min_angles": []}
+    }
     
-    # Übung ist noch unbekannt
-    detected_exercise = "Unbekannt"
+    frame_count = 0
     
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -100,57 +82,59 @@ def process_video(video_path):
         
         try:
             landmarks = results.pose_landmarks.landmark
-            
-            # --- 1. AUTOMATISCHE ERKENNUNG (Entscheidung im 10. Frame) ---
-            if frame_count == 10: 
-                detected_exercise = detect_exercise_type(landmarks)
-                st.toast(f"Übung erkannt: {detected_exercise} 🏃", icon="✅")
-
-            # --- 2. WINKELAUSWAHL JE NACH ÜBUNG ---
+            current_exercise = detect_exercise_type(landmarks)
             angle = 0
             
-            if detected_exercise == "Squat":
-                # SQUAT: Hüfte - Knie - Knöchel
+            # --- AÇI HESAPLAMA ---
+            if current_exercise == "Squat":
                 p1 = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
                 p2 = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
                 p3 = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
                 angle = calculate_angle(p1, p2, p3)
                 
-            elif detected_exercise == "Push-Up":
-                # PUSH-UP: Schulter - Ellenbogen - Handgelenk
+                # Mantık ve Min Açı Kaydı
+                if angle > 160:
+                    stats["Squat"]["stage"] = "UP"
+                if angle < 90 and stats["Squat"]["stage"] == 'UP':
+                    stats["Squat"]["stage"] = "DOWN"
+                    stats["Squat"]["count"] += 1
+                    stats["Squat"]["min_angles"].append(int(angle)) # Her tekrarın en derin noktasını kaydet
+                
+                stats["Squat"]["angles"].append(angle)
+                stats["Squat"]["frames"].append(frame_count)
+            
+            elif current_exercise == "Push-Up":
                 p1 = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
                 p2 = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
                 p3 = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
                 angle = calculate_angle(p1, p2, p3)
-            
-            # --- 3. SPEICHERN UND ZÄHLEN ---
-            if detected_exercise != "Unbekannt":
-                angle_history.append(angle)
-                frame_indices.append(frame_count)
                 
-                # Zähl-Logik
                 if angle > 160:
-                    stage = "UP"
-                if angle < 90 and stage == 'UP':
-                    stage = "DOWN"
-                    count += 1
+                    stats["Push-Up"]["stage"] = "UP"
+                if angle < 90 and stats["Push-Up"]["stage"] == 'UP':
+                    stats["Push-Up"]["stage"] = "DOWN"
+                    stats["Push-Up"]["count"] += 1
+                    stats["Push-Up"]["min_angles"].append(int(angle))
                 
+                stats["Push-Up"]["angles"].append(angle)
+                stats["Push-Up"]["frames"].append(frame_count)
+
         except:
             pass
             
         frame_count += 1
         if frame_count % 10 == 0:
             progress_bar.progress(min(frame_count / total_frames, 1.0))
-            status_text.text(f"Video wird verarbeitet... Frame: {frame_count}")
+            status_text.text(f"Analysiere Frame {frame_count}...")
 
     cap.release()
     progress_bar.empty()
     status_text.empty()
     
-    return angle_history, frame_indices, count, detected_exercise
+    return stats
 
 # --- HAUPTABLAUF ---
-uploaded_file = st.file_uploader("Video zur Analyse hochladen (MP4)", type=["mp4", "mov"])
+uploaded_file = st.file_uploader("Video hochladen (MP4)", type=["mp4", "mov"])
 
 if uploaded_file is not None:
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') 
@@ -159,96 +143,77 @@ if uploaded_file is not None:
     
     st.video(video_path)
     
-    if st.button("🚀 Automatische Analyse starten"):
-        with st.spinner('KI erkennt und analysiert die Bewegung...'):
+    if st.button("🚀 Detaillierte Analyse starten"):
+        with st.spinner('KI berechnet Biomechanik...'):
+            stats = process_video(video_path)
+            st.success("Daten extrahiert. KI-Bericht wird erstellt...")
             
-            # Funktion aufrufen
-            angles, frames, count, detected_type = process_video(video_path)
+            # Grafik Hazırlama
+            fig, ax = plt.subplots(figsize=(12, 5))
             
-            if detected_type == "Unbekannt":
-                st.error("Keine Person erkannt oder Übung konnte nicht identifiziert werden.")
-            else:
-                st.success(f"Analyse abgeschlossen! Erkannte Übung: **{detected_type}**")
-                
-                # 1. Metriken
-                col1, col2 = st.columns(2)
-                col1.metric("Wiederholungen", f"{count}", detected_type)
-                
-                if angles:
-                    label = "Min. Kniewinkel" if detected_type == "Squat" else "Min. Ellenbogenwinkel"
-                    col1.metric(label, f"{int(min(angles))}°", "Grad")
-                
-                # 2. Grafik
-                fig, ax = plt.subplots(figsize=(10, 4))
-                ax.plot(frames, angles, label='Winkelverlauf', color='#007acc')
-                ax.axhline(y=90, color='green', linestyle='--', label='Ziel (90°)')
-                ax.axhline(y=160, color='red', linestyle='--', label='Start (160°)')
-                ax.set_title(f"Biomechanische Analyse: {detected_type}")
-                ax.set_xlabel("Zeit (Frames)")
-                ax.set_ylabel("Winkel (Grad)")
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                
-                st.pyplot(fig)
-                plt.savefig("temp_graph.png")
-                
-                # 3. Gemini Feedback
-                final_api_key = api_key_input
-                
-                if final_api_key:
-                    st.subheader("🤖 KI-Coach Empfehlung")
-                    with st.spinner('Gemini analysiert...'):
-                        try:
-                            genai.configure(api_key=final_api_key)
+            has_squat = bool(stats["Squat"]["frames"])
+            has_pushup = bool(stats["Push-Up"]["frames"])
+            
+            if has_squat:
+                ax.plot(stats["Squat"]["frames"], stats["Squat"]["angles"], label='Squat', color='#007acc')
+            if has_pushup:
+                ax.plot(stats["Push-Up"]["frames"], stats["Push-Up"]["angles"], label='Push-Up', color='#ff7f0e')
 
-                            model = genai.GenerativeModel('gemini-2.0-flash')
-                            img = Image.open("temp_graph.png")
-                            
-                            # Python'dan gelen matematiksel verileri hesapla
-                            min_angle_val = int(min(angles)) if angles else 0
-                            avg_angle_val = int(sum(angles)/len(angles)) if angles else 0
-                            
-                            # --- PROFESYONEL PROMPT (KOMUT) ---
-                            prompt = f"""
-                            Du bist ein erfahrener Sportwissenschaftler und Biomechanik-Experte für olympische Athleten.
-                            
-                            Hintergrunddaten zur Übung:
-                            - Erkannte Übung: {detected_type}
-                            - Anzahl der Wiederholungen: {count}
-                            - Tiefster gemessener Winkel: {min_angle_val} Grad
-                            - Durchschnittlicher Gelenkwinkel: {avg_angle_val} Grad
-                            
-                            Aufgabe:
-                            Analysiere die beigefügte Grafik (Zeit vs. Winkel) und die Daten extrem detailliert.
-                            Antworte strukturiert auf DEUTSCH in folgendem Format:
-                            
-                            ### 1. 📏 Bewegungsqualität & Tiefe (Range of Motion)
-                            - Bewerte die Tiefe basierend auf dem tiefsten Winkel ({min_angle_val}°). 
-                            - Ist das für einen {detected_type} biomechanisch optimal (Ziel: <90° für Squat)?
-                            - Vergleiche die erste und die letzte Wiederholung in der Grafik.
-                            
-                            ### 2. 📉 Ermüdungsanalyse & Konsistenz
-                            - Betrachte die Spitzen (Peaks) und Täler (Valleys) der blauen Linie.
-                            - Sind alle Wiederholungen gleichmäßig (Konsistenz)?
-                            - Gibt es "Zittern" (kleine Wellen in der Linie) oder wird die Bewegung langsamer (breitere Wellen)? Das deutet auf Muskelversagen hin.
-                            
-                            ### 3. ⚠️ Verletzungsrisiko & Fehler
-                            - Gibt es plötzliche Einbrüche oder Pausen an der falschen Stelle?
-                            - Bewerte das Risiko basierend auf der Stabilität der Kurve.
-                            
-                            ### 4. 🚀 Profi-Tipp zur Optimierung
-                            - Gib EINEN konkreten, biomechanischen Tipp, um die Technik sofort zu verbessern.
-                            - Empfiehl eine Hilfsübung (z.B. "Mehr Mobilitätstraining für die Hüfte").
-                            
-                            Tonfall: Professionell, motivierend, datenbasiert.
-                            """
-                            
-                            response = model.generate_content([prompt, img])
-                            st.markdown(response.text)
-                            
-                        except Exception as e:
-                            st.error(f"KI-Fehler: {e}")
-                else:
-                    st.warning("⚠️ Bitte API-Schlüssel eingeben.")
+            ax.axhline(y=90, color='green', linestyle='--', label='Ideal (90°)')
+            ax.set_title("Bewegungsamplitude (Range of Motion)")
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            st.pyplot(fig)
+            plt.savefig("graph_detailed.png")
 
+            # --- GELİŞMİŞ GEMINI PROMPT ---
+            final_api_key = api_key_input
+            if final_api_key:
+                st.subheader("🔬 Wissenschaftliche Analyse")
+                with st.spinner('Der KI-Sportwissenschaftler schreibt den Bericht...'):
+                    try:
+                        genai.configure(api_key=final_api_key)
+                        model = genai.GenerativeModel('gemini-2.0-flash')
+                        img = Image.open("graph_detailed.png")
+                        
+                        # İstatistikleri Metne Dökme
+                        data_summary = ""
+                        if has_squat:
+                            avg_depth = int(sum(stats["Squat"]["min_angles"])/len(stats["Squat"]["min_angles"])) if stats["Squat"]["min_angles"] else 0
+                            data_summary += f"\n- SQUATS: {stats['Squat']['count']} Wdh. Durchschnittliche Tiefe: {avg_depth} Grad."
+                        if has_pushup:
+                            avg_depth = int(sum(stats["Push-Up"]["min_angles"])/len(stats["Push-Up"]["min_angles"])) if stats["Push-Up"]["min_angles"] else 0
+                            data_summary += f"\n- PUSH-UPS: {stats['Push-Up']['count']} Wdh. Durchschnittliche Tiefe: {avg_depth} Grad."
 
+                        # PROMPT MÜHENDİSLİĞİ BURADA
+                        prompt = f"""
+                        Du bist ein leitender Sportwissenschaftler für olympische Athleten.
+                        Hier sind die gemessenen Daten aus dem Computer-Vision-System:
+                        {data_summary}
+                        
+                        Aufgabe: Analysiere die beigefügte Grafik und die Daten extrem präzise.
+                        Antworte strukturiert auf DEUTSCH in diesem Format:
+                        
+                        ### 1. 📏 Qualität & Range of Motion (ROM)
+                        - Bewerte die Tiefe basierend auf den Daten (Ziel ist <90 Grad).
+                        - Vergleiche die erste und die letzte Wiederholung in der Grafik (Ermüdung?).
+                        
+                        ### 2. ⏱️ Rhythmus & Konsistenz
+                        - Ist die Kurve gleichmäßig oder zittrig? (Zittern deutet auf Instabilität hin).
+                        - War das Tempo konstant?
+                        
+                        ### 3. ⚠️ Verletzungsrisiko
+                        - Gibt es plötzliche Einbrüche in der Kurve?
+                        - Bewertung der Sicherheit (Hoch/Mittel/Niedrig).
+                        
+                        ### 4. 🚀 Profi-Tipp zur Optimierung
+                        - Ein konkreter biomechanischer Rat zur Verbesserung.
+                        
+                        Tonfall: Sachlich, wissenschaftlich, motivierend.
+                        """
+                        
+                        response = model.generate_content([prompt, img])
+                        st.markdown(response.text)
+                        
+                    except Exception as e:
+                        st.error(f"KI-Fehler: {e}")
