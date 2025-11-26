@@ -201,7 +201,7 @@ if uploaded_file is not None:
                         try:
                             genai.configure(api_key=final_api_key)
 
-                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            model = genai.GenerativeModel('gemini-2.0-flash')
                             img = Image.open("temp_graph.png")
                             
                             # Python'dan gelen matematiksel verileri hesapla
@@ -250,4 +250,5 @@ if uploaded_file is not None:
                             st.error(f"KI-Fehler: {e}")
                 else:
                     st.warning("⚠️ Bitte API-Schlüssel eingeben.")
+
 
