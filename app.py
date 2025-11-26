@@ -200,22 +200,49 @@ if uploaded_file is not None:
                     with st.spinner('Gemini analysiert...'):
                         try:
                             genai.configure(api_key=final_api_key)
-                            # Stabilstes Modell verwenden
-                            model = genai.GenerativeModel('gemini-2.0-flash')
+
+                            model = genai.GenerativeModel('gemini-1.5-flash')
                             img = Image.open("temp_graph.png")
                             
+                            # Python'dan gelen matematiksel verileri hesapla
+                            min_angle_val = int(min(angles)) if angles else 0
+                            avg_angle_val = int(sum(angles)/len(angles)) if angles else 0
+                            
+                            # --- PROFESYONEL PROMPT (KOMUT) ---
                             prompt = f"""
-                            Du bist ein professioneller Sporttrainer.
-                            Der Nutzer hat folgende Übung ausgeführt: {detected_type}.
-                            Gesamte Wiederholungen: {count}.
+                            Du bist ein erfahrener Sportwissenschaftler und Biomechanik-Experte für olympische Athleten.
                             
-                            Analysiere die Grafikdaten:
-                            1. War die Tiefe ausreichend? (Wurde die 90-Grad-Linie erreicht?)
-                            2. Gibt es Anzeichen von Ermüdung oder Inkonsistenz?
-                            3. Gib einen kurzen technischen Rat für {detected_type}.
+                            Hintergrunddaten zur Übung:
+                            - Erkannte Übung: {detected_type}
+                            - Anzahl der Wiederholungen: {count}
+                            - Tiefster gemessener Winkel: {min_angle_val} Grad
+                            - Durchschnittlicher Gelenkwinkel: {avg_angle_val} Grad
                             
-                            Antworte bitte auf Deutsch.
+                            Aufgabe:
+                            Analysiere die beigefügte Grafik (Zeit vs. Winkel) und die Daten extrem detailliert.
+                            Antworte strukturiert auf DEUTSCH in folgendem Format:
+                            
+                            ### 1. 📏 Bewegungsqualität & Tiefe (Range of Motion)
+                            - Bewerte die Tiefe basierend auf dem tiefsten Winkel ({min_angle_val}°). 
+                            - Ist das für einen {detected_type} biomechanisch optimal (Ziel: <90° für Squat)?
+                            - Vergleiche die erste und die letzte Wiederholung in der Grafik.
+                            
+                            ### 2. 📉 Ermüdungsanalyse & Konsistenz
+                            - Betrachte die Spitzen (Peaks) und Täler (Valleys) der blauen Linie.
+                            - Sind alle Wiederholungen gleichmäßig (Konsistenz)?
+                            - Gibt es "Zittern" (kleine Wellen in der Linie) oder wird die Bewegung langsamer (breitere Wellen)? Das deutet auf Muskelversagen hin.
+                            
+                            ### 3. ⚠️ Verletzungsrisiko & Fehler
+                            - Gibt es plötzliche Einbrüche oder Pausen an der falschen Stelle?
+                            - Bewerte das Risiko basierend auf der Stabilität der Kurve.
+                            
+                            ### 4. 🚀 Profi-Tipp zur Optimierung
+                            - Gib EINEN konkreten, biomechanischen Tipp, um die Technik sofort zu verbessern.
+                            - Empfiehl eine Hilfsübung (z.B. "Mehr Mobilitätstraining für die Hüfte").
+                            
+                            Tonfall: Professionell, motivierend, datenbasiert.
                             """
+                            
                             response = model.generate_content([prompt, img])
                             st.markdown(response.text)
                             
@@ -223,3 +250,4 @@ if uploaded_file is not None:
                             st.error(f"KI-Fehler: {e}")
                 else:
                     st.warning("⚠️ Bitte API-Schlüssel eingeben.")
+
