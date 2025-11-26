@@ -182,7 +182,8 @@ with st.sidebar:
     
     st.divider()
     st.info(t["info_text"])
-    st.write("Dev: FormFlow Team")
+    st.write("Dev: Can Evli")
+    st.write("     Neue Schule - Wolfsburg")    
 
 # --- FONKSİYONLAR ---
 def calculate_angle(a, b, c):
@@ -343,3 +344,4 @@ if uploaded_file is not None:
                             st.error(f"AI Error: {e}")
                 else:
                     st.warning(t["warning_api"])
+
