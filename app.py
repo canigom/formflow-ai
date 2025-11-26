@@ -17,7 +17,7 @@ st.set_page_config(
 
 # --- DİL SÖZLÜĞÜ (SADECE BAYRAKLAR) ---
 TRANSLATIONS = {
-    "🇩🇪": {
+    "Deutsch": {
         "title": "🏋️ FormFlow AI: Auto-Modus",
         "desc": "**KI-gestützte biomechanische Analyse:** Laden Sie ein Video hoch – die KI erkennt automatisch Ihre Übung und analysiert Ihre Technik.",
         "sidebar_header": "⚙️ Einstellungen",
@@ -64,7 +64,7 @@ TRANSLATIONS = {
         Tonfall: Sachlich, wissenschaftlich, motivierend.
         """
     },
-    "🇬🇧": {
+    "English": {
         "title": "🏋️ FormFlow AI: Auto-Mode",
         "desc": "**AI-Powered Biomechanical Analysis:** Upload a video – the AI automatically detects your exercise and analyzes your technique.",
         "sidebar_header": "⚙️ Settings",
@@ -111,7 +111,7 @@ TRANSLATIONS = {
         Tone: Professional, scientific, motivating.
         """
     },
-    "🇹🇷": {
+    "Türkçe": {
         "title": "🏋️ FormFlow AI: Otomatik Mod",
         "desc": "**Yapay Zeka Destekli Biyomekanik Analiz:** Videonuzu yükleyin, yapay zeka hareketinizi otomatik tanısın ve tekniğinizi analiz etsin.",
         "sidebar_header": "⚙️ Ayarlar",
@@ -344,3 +344,4 @@ if uploaded_file is not None:
                             st.error(f"AI Error: {e}")
                 else:
                     st.warning(t["warning_api"])
+
