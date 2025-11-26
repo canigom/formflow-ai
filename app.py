@@ -8,38 +8,38 @@ import google.generativeai as genai
 from PIL import Image
 import os
 
-# --- SAYFA AYARLARI ---
+# --- SEITENEINSTELLUNGEN ---
 st.set_page_config(
     page_title="FormFlow AI - Auto Trainer",
     page_icon="🧠",
     layout="wide"
 )
 
-# --- BAŞLIK ---
-st.title("🧠 FormFlow AI: Auto-Mode")
+# --- TITEL UND BESCHREIBUNG ---
+st.title("🧠 FormFlow AI: Auto-Modus")
 st.markdown("""
-**Tam Otomatik Biyomekanik Analiz:** Video yükleyin, yapay zeka hangi hareketi yaptığınızı **kendisi anlasın** ve analiz etsin.
+**Vollautomatische biomechanische Analyse:** Laden Sie ein Video hoch – die KI erkennt automatisch Ihre Übung und analysiert Ihre Technik.
 """)
 
-# --- SIDEBAR (YAN MENÜ) ---
+# --- SIDEBAR (EINSTELLUNGEN) ---
 with st.sidebar:
-    st.header("⚙️ Ayarlar")
+    st.header("⚙️ Einstellungen")
     
-    # API KEY YÖNETİMİ
+    # API-KEY VERWALTUNG
     if "GOOGLE_API_KEY" in st.secrets:
         api_key_input = st.secrets["GOOGLE_API_KEY"]
-        st.success("✅ API-Key sistemden yüklendi.")
+        st.success("✅ API-Key vom System geladen.")
     else:
-        api_key_input = st.text_input("Google Gemini API-Key", type="password")
-        st.info("Manuel giriş yapılıyor.")
+        api_key_input = st.text_input("Google Gemini API-Schlüssel", type="password")
+        st.info("Manuelle Eingabe aktiv.")
     
     st.divider()
-    st.info("ℹ️ Sistem, vücudunuzun duruşuna göre (Dikey/Yatay) hareketi otomatik algılar.")
-    st.write("Dev: FormFlow Team")
+    st.info("ℹ️ Das System erkennt die Übung automatisch anhand Ihrer Körperhaltung (Stehend/Liegend).")
+    st.write("Entwickler: FormFlow Team")
 
-# --- FONKSİYONLAR ---
+# --- FUNKTIONEN ---
 def calculate_angle(a, b, c):
-    """3 nokta arasındaki açıyı hesaplar"""
+    """Berechnet den Winkel zwischen 3 Punkten"""
     a = np.array(a)
     b = np.array(b)
     c = np.array(c)
@@ -51,9 +51,9 @@ def calculate_angle(a, b, c):
 
 def detect_exercise_type(landmarks):
     """
-    Vücudun en boy oranına bakarak hareketi tahmin eder.
+    Schätzt die Übung basierend auf dem Seitenverhältnis des Körpers.
     """
-    # Tüm noktaların x ve y koordinatlarını al
+    # Alle x- und y-Koordinaten abrufen
     x_coords = [lm.x for lm in landmarks]
     y_coords = [lm.y for lm in landmarks]
     
@@ -63,8 +63,8 @@ def detect_exercise_type(landmarks):
     width = max_x - min_x
     height = max_y - min_y
     
-    # EĞER YÜKSEKLİK > GENİŞLİK --> SQUAT (Ayakta)
-    # EĞER GENİŞLİK > YÜKSEKLİK --> PUSH-UP (Yerde)
+    # WENN HÖHE > BREITE --> SQUAT (Stehend)
+    # WENN BREITE > HÖHE --> PUSH-UP (Liegend)
     if height > width:
         return "Squat"
     else:
@@ -81,8 +81,8 @@ def process_video(video_path):
     count = 0
     stage = None
     
-    # Hareketi henüz bilmiyoruz
-    detected_exercise = "Bilinmiyor"
+    # Übung ist noch unbekannt
+    detected_exercise = "Unbekannt"
     
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -101,36 +101,34 @@ def process_video(video_path):
         try:
             landmarks = results.pose_landmarks.landmark
             
-            # --- 1. OTOMATİK TESPİT (İlk 10 karede karar verilir) ---
-            # Videonun başında hareketi anlamaya çalışır
+            # --- 1. AUTOMATISCHE ERKENNUNG (Entscheidung im 10. Frame) ---
             if frame_count == 10: 
                 detected_exercise = detect_exercise_type(landmarks)
-                st.toast(f"Hareket Algılandı: {detected_exercise} 🏃", icon="✅")
+                st.toast(f"Übung erkannt: {detected_exercise} 🏃", icon="✅")
 
-            # --- 2. HAREKETE GÖRE AÇI SEÇİMİ ---
+            # --- 2. WINKELAUSWAHL JE NACH ÜBUNG ---
             angle = 0
             
             if detected_exercise == "Squat":
-                # SQUAT: Kalça - Diz - Bilek
+                # SQUAT: Hüfte - Knie - Knöchel
                 p1 = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
                 p2 = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
                 p3 = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
                 angle = calculate_angle(p1, p2, p3)
                 
             elif detected_exercise == "Push-Up":
-                # PUSH-UP: Omuz - Dirsek - Bilek
+                # PUSH-UP: Schulter - Ellenbogen - Handgelenk
                 p1 = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
                 p2 = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
                 p3 = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
                 angle = calculate_angle(p1, p2, p3)
             
-            # --- 3. KAYIT VE SAYMA ---
-            # Sadece hareket tespit edildiyse kaydet
-            if detected_exercise != "Bilinmiyor":
+            # --- 3. SPEICHERN UND ZÄHLEN ---
+            if detected_exercise != "Unbekannt":
                 angle_history.append(angle)
                 frame_indices.append(frame_count)
                 
-                # Ortak Sayma Mantığı (Squat ve Şınav benzer çalışır)
+                # Zähl-Logik
                 if angle > 160:
                     stage = "UP"
                 if angle < 90 and stage == 'UP':
@@ -143,7 +141,7 @@ def process_video(video_path):
         frame_count += 1
         if frame_count % 10 == 0:
             progress_bar.progress(min(frame_count / total_frames, 1.0))
-            status_text.text(f"Video işleniyor... Kare: {frame_count}")
+            status_text.text(f"Video wird verarbeitet... Frame: {frame_count}")
 
     cap.release()
     progress_bar.empty()
@@ -151,8 +149,8 @@ def process_video(video_path):
     
     return angle_history, frame_indices, count, detected_exercise
 
-# --- ANA AKIŞ ---
-uploaded_file = st.file_uploader("Analiz için Video Yükle (MP4)", type=["mp4", "mov"])
+# --- HAUPTABLAUF ---
+uploaded_file = st.file_uploader("Video zur Analyse hochladen (MP4)", type=["mp4", "mov"])
 
 if uploaded_file is not None:
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') 
@@ -161,65 +159,67 @@ if uploaded_file is not None:
     
     st.video(video_path)
     
-    if st.button("🚀 Otomatik Analizi Başlat"):
-        with st.spinner('Yapay Zeka hareketi algılıyor ve analiz ediyor...'):
+    if st.button("🚀 Automatische Analyse starten"):
+        with st.spinner('KI erkennt und analysiert die Bewegung...'):
             
-            # Fonksiyonu çağır (Artık hareket tipi göndermiyoruz, o bize söylüyor)
+            # Funktion aufrufen
             angles, frames, count, detected_type = process_video(video_path)
             
-            if detected_type == "Bilinmiyor":
-                st.error("Videoda insan tespit edilemedi veya hareket anlaşılamadı.")
+            if detected_type == "Unbekannt":
+                st.error("Keine Person erkannt oder Übung konnte nicht identifiziert werden.")
             else:
-                st.success(f"Analiz Tamamlandı! Tespit Edilen Hareket: **{detected_type}**")
+                st.success(f"Analyse abgeschlossen! Erkannte Übung: **{detected_type}**")
                 
-                # 1. Metrikler
+                # 1. Metriken
                 col1, col2 = st.columns(2)
-                col1.metric("Tekrar Sayısı", f"{count}", detected_type)
+                col1.metric("Wiederholungen", f"{count}", detected_type)
                 
                 if angles:
-                    label = "Min. Diz Açısı" if detected_type == "Squat" else "Min. Dirsek Açısı"
-                    col1.metric(label, f"{int(min(angles))}°", "Derece")
+                    label = "Min. Kniewinkel" if detected_type == "Squat" else "Min. Ellenbogenwinkel"
+                    col1.metric(label, f"{int(min(angles))}°", "Grad")
                 
                 # 2. Grafik
                 fig, ax = plt.subplots(figsize=(10, 4))
-                ax.plot(frames, angles, label='Açı Değişimi', color='#007acc')
-                ax.axhline(y=90, color='green', linestyle='--', label='Hedef (90°)')
-                ax.axhline(y=160, color='red', linestyle='--', label='Başlangıç (160°)')
-                ax.set_title(f"Biyomekanik Analiz: {detected_type}")
-                ax.set_xlabel("Zaman (Kare)")
-                ax.set_ylabel("Açı (Derece)")
+                ax.plot(frames, angles, label='Winkelverlauf', color='#007acc')
+                ax.axhline(y=90, color='green', linestyle='--', label='Ziel (90°)')
+                ax.axhline(y=160, color='red', linestyle='--', label='Start (160°)')
+                ax.set_title(f"Biomechanische Analyse: {detected_type}")
+                ax.set_xlabel("Zeit (Frames)")
+                ax.set_ylabel("Winkel (Grad)")
                 ax.legend()
                 ax.grid(True, alpha=0.3)
                 
                 st.pyplot(fig)
                 plt.savefig("temp_graph.png")
                 
-                # 3. Gemini Feedback (Otomatik Prompt)
+                # 3. Gemini Feedback
                 final_api_key = api_key_input
                 
                 if final_api_key:
-                    st.subheader("🤖 Yapay Zeka Koç Tavsiyesi")
-                    with st.spinner('Gemini yorumluyor...'):
+                    st.subheader("🤖 KI-Coach Empfehlung")
+                    with st.spinner('Gemini analysiert...'):
                         try:
                             genai.configure(api_key=final_api_key)
+                            # Stabilstes Modell verwenden
                             model = genai.GenerativeModel('gemini-2.0-flash')
                             img = Image.open("temp_graph.png")
                             
                             prompt = f"""
-                            Sen profesyonel bir spor antrenörüsün.
-                            Kullanıcı şu hareketi yaptı: {detected_type}.
-                            Toplam Tekrar: {count}.
-                            Grafik verilerine bakarak:
-                            1. Derinlik yeterli mi? (90 derece çizgisine inilmiş mi?)
-                            2. Performans düşüklüğü (yorgunluk) var mı?
-                            3. {detected_type} için teknik bir tavsiye ver.
-                            Cevabın Almanca olsun.
+                            Du bist ein professioneller Sporttrainer.
+                            Der Nutzer hat folgende Übung ausgeführt: {detected_type}.
+                            Gesamte Wiederholungen: {count}.
+                            
+                            Analysiere die Grafikdaten:
+                            1. War die Tiefe ausreichend? (Wurde die 90-Grad-Linie erreicht?)
+                            2. Gibt es Anzeichen von Ermüdung oder Inkonsistenz?
+                            3. Gib einen kurzen technischen Rat für {detected_type}.
+                            
+                            Antworte bitte auf Deutsch.
                             """
                             response = model.generate_content([prompt, img])
                             st.markdown(response.text)
                             
                         except Exception as e:
-                            st.error(f"Yapay Zeka Hatası: {e}")
+                            st.error(f"KI-Fehler: {e}")
                 else:
-                    st.warning("⚠️ Lütfen API Key giriniz.")
-
+                    st.warning("⚠️ Bitte API-Schlüssel eingeben.")
