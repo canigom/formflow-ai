@@ -202,7 +202,7 @@ if uploaded_file is not None:
                     with st.spinner('Gemini yorumluyor...'):
                         try:
                             genai.configure(api_key=final_api_key)
-                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            model = genai.GenerativeModel('gemini-2.0-flash')
                             img = Image.open("temp_graph.png")
                             
                             prompt = f"""
@@ -222,3 +222,4 @@ if uploaded_file is not None:
                             st.error(f"Yapay Zeka Hatası: {e}")
                 else:
                     st.warning("⚠️ Lütfen API Key giriniz.")
+
