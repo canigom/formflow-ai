@@ -322,7 +322,7 @@ if uploaded_file is not None:
                     with st.spinner(t["spinner_ai"]):
                         try:
                             genai.configure(api_key=final_api_key)
-                            model = genai.GenerativeModel('gemini-2.0-flash')
+                            model = genai.GenerativeModel('gemini-1.5-flash')
                             img = Image.open("graph_detailed.png")
                             
                             # Verileri Özetle
@@ -344,4 +344,5 @@ if uploaded_file is not None:
                             st.error(f"AI Error: {e}")
                 else:
                     st.warning(t["warning_api"])
+
 
