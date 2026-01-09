@@ -1,8 +1,6 @@
 import streamlit as st
 import cv2
 import mediapipe as mp
-# Bazen açık import yapmak gerekebilir:
-import mediapipe.python.solutions.pose as mp_pose
 import numpy as np
 import matplotlib.pyplot as plt
 import tempfile
@@ -346,6 +344,7 @@ if uploaded_file is not None:
                             st.error(f"AI Error: {e}")
                 else:
                     st.warning(t["warning_api"])
+
 
 
 
