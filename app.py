@@ -7,6 +7,7 @@ import tempfile
 import google.generativeai as genai
 from PIL import Image
 import os
+import io  # NEU: Für die Verarbeitung von Bildern im Arbeitsspeicher
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(
@@ -160,10 +161,9 @@ TRANSLATIONS = {
     }
 }
 
-# --- DİL SEÇİMİ (SADECE BAYRAK) ---
-# Kullanıcı sadece bayrağı görecek (🇩🇪, 🇬🇧, 🇹🇷)
+# --- DİL SEÇİMİ ---
 language_options = list(TRANSLATIONS.keys())
-language = st.sidebar.selectbox("Language", language_options, index=0) # index=0 Varsayılan (Almanca Bayrağı)
+language = st.sidebar.selectbox("Language", language_options, index=0)
 t = TRANSLATIONS[language]
 
 # --- BAŞLIK VE AÇIKLAMA ---
@@ -201,76 +201,82 @@ def detect_exercise_type(landmarks):
     y_coords = [lm.y for lm in landmarks]
     width = max(x_coords) - min(x_coords)
     height = max(y_coords) - min(y_coords)
+    # Einfache Heuristik: Ist die Bounding Box höher als breit? -> Squat, sonst PushUp
     return "Squat" if height > width else "Push-Up"
 
 def process_video(video_path):
     mp_pose = mp.solutions.pose
-    pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-    cap = cv2.VideoCapture(video_path)
-    
     stats = {
         "Squat": {"count": 0, "angles": [], "frames": [], "stage": None, "min_angles": []},
         "Push-Up": {"count": 0, "angles": [], "frames": [], "stage": None, "min_angles": []}
     }
     
-    frame_count = 0
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        st.error("Error opening video file.")
+        return stats
+
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if total_frames == 0: total_frames = 1
     
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    frame_count = 0
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # OPTIMIERUNG: Context Manager für MediaPipe Pose (besseres Speichermanagement)
+    with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image.flags.writeable = False # Performance-Boost
+            results = pose.process(image)
+            image.flags.writeable = True
             
-        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(image)
-        
-        try:
-            landmarks = results.pose_landmarks.landmark
-            current_exercise = detect_exercise_type(landmarks)
-            angle = 0
-            
-            if current_exercise == "Squat":
-                p1 = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                p2 = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                p3 = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
-                angle = calculate_angle(p1, p2, p3)
+            # WICHTIG: Prüfen ob Landmarks existieren, statt generisches try/except
+            if results.pose_landmarks:
+                landmarks = results.pose_landmarks.landmark
+                current_exercise = detect_exercise_type(landmarks)
+                angle = 0
                 
-                if angle > 160:
-                    stats["Squat"]["stage"] = "UP"
-                if angle < 90 and stats["Squat"]["stage"] == 'UP':
-                    stats["Squat"]["stage"] = "DOWN"
-                    stats["Squat"]["count"] += 1
-                    stats["Squat"]["min_angles"].append(int(angle))
+                if current_exercise == "Squat":
+                    p1 = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+                    p2 = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+                    p3 = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+                    angle = calculate_angle(p1, p2, p3)
+                    
+                    if angle > 160:
+                        stats["Squat"]["stage"] = "UP"
+                    if angle < 90 and stats["Squat"]["stage"] == 'UP':
+                        stats["Squat"]["stage"] = "DOWN"
+                        stats["Squat"]["count"] += 1
+                        stats["Squat"]["min_angles"].append(int(angle))
+                    
+                    stats["Squat"]["angles"].append(angle)
+                    stats["Squat"]["frames"].append(frame_count)
                 
-                stats["Squat"]["angles"].append(angle)
-                stats["Squat"]["frames"].append(frame_count)
-            
-            elif current_exercise == "Push-Up":
-                p1 = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                p2 = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-                p3 = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
-                angle = calculate_angle(p1, p2, p3)
-                
-                if angle > 160:
-                    stats["Push-Up"]["stage"] = "UP"
-                if angle < 90 and stats["Push-Up"]["stage"] == 'UP':
-                    stats["Push-Up"]["stage"] = "DOWN"
-                    stats["Push-Up"]["count"] += 1
-                    stats["Push-Up"]["min_angles"].append(int(angle))
-                
-                stats["Push-Up"]["angles"].append(angle)
-                stats["Push-Up"]["frames"].append(frame_count)
+                elif current_exercise == "Push-Up":
+                    p1 = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+                    p2 = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
+                    p3 = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
+                    angle = calculate_angle(p1, p2, p3)
+                    
+                    if angle > 160:
+                        stats["Push-Up"]["stage"] = "UP"
+                    if angle < 90 and stats["Push-Up"]["stage"] == 'UP':
+                        stats["Push-Up"]["stage"] = "DOWN"
+                        stats["Push-Up"]["count"] += 1
+                        stats["Push-Up"]["min_angles"].append(int(angle))
+                    
+                    stats["Push-Up"]["angles"].append(angle)
+                    stats["Push-Up"]["frames"].append(frame_count)
 
-        except:
-            pass
-            
-        frame_count += 1
-        if frame_count % 10 == 0:
-            progress_bar.progress(min(frame_count / total_frames, 1.0))
-            status_text.text(f"Processing... Frame: {frame_count}")
+            frame_count += 1
+            if frame_count % 10 == 0:
+                progress_bar.progress(min(frame_count / total_frames, 1.0))
+                status_text.text(f"Processing... Frame: {frame_count} / {total_frames}")
 
     cap.release()
     progress_bar.empty()
@@ -281,69 +287,81 @@ def process_video(video_path):
 uploaded_file = st.file_uploader(t["upload_label"], type=["mp4", "mov"])
 
 if uploaded_file is not None:
+    # Temporäre Datei erstellen
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') 
     tfile.write(uploaded_file.read())
     video_path = tfile.name
+    tfile.close() # Datei schließen, damit andere Prozesse darauf zugreifen können
     
-    st.video(video_path)
-    
-    if st.button(t["btn_start"]):
-        with st.spinner(t["spinner_calc"]):
-            stats = process_video(video_path)
-            st.success(t["success_complete"])
-            
-            # Grafik Hazırlama
-            fig, ax = plt.subplots(figsize=(12, 5))
-            
-            has_squat = bool(stats["Squat"]["frames"])
-            has_pushup = bool(stats["Push-Up"]["frames"])
-            
-            if not has_squat and not has_pushup:
-                st.error(t["detect_unknown"])
-            else:
-                if has_squat:
-                    ax.plot(stats["Squat"]["frames"], stats["Squat"]["angles"], label=t["exercise_names"]["Squat"], color='#007acc')
-                if has_pushup:
-                    ax.plot(stats["Push-Up"]["frames"], stats["Push-Up"]["angles"], label=t["exercise_names"]["Push-Up"], color='#ff7f0e')
-
-                ax.axhline(y=90, color='green', linestyle='--', label='Target (90°)')
-                ax.set_title(t["chart_title"])
-                ax.set_xlabel(t["chart_x"])
-                ax.set_ylabel(t["chart_y"])
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                st.pyplot(fig)
-                plt.savefig("graph_detailed.png")
-
-                # --- GEMINI ANALİZİ (ÇOK DİLLİ) ---
-                final_api_key = api_key_input
-                if final_api_key:
-                    st.subheader(t["ai_header"])
-                    with st.spinner(t["spinner_ai"]):
-                        try:
-                            genai.configure(api_key=final_api_key)
-                            model = genai.GenerativeModel('gemini-2.0-flash')
-                            img = Image.open("graph_detailed.png")
-                            
-                            # Verileri Özetle
-                            data_summary = ""
-                            if has_squat:
-                                avg_depth = int(sum(stats["Squat"]["min_angles"])/len(stats["Squat"]["min_angles"])) if stats["Squat"]["min_angles"] else 0
-                                data_summary += f"\n- {t['exercise_names']['Squat']}: {stats['Squat']['count']} {t['metric_reps']}. Avg Depth: {avg_depth}°."
-                            if has_pushup:
-                                avg_depth = int(sum(stats["Push-Up"]["min_angles"])/len(stats["Push-Up"]["min_angles"])) if stats["Push-Up"]["min_angles"] else 0
-                                data_summary += f"\n- {t['exercise_names']['Push-Up']}: {stats['Push-Up']['count']} {t['metric_reps']}. Avg Depth: {avg_depth}°."
-
-                            # Promptu seçilen dile göre al ve verileri içine göm
-                            prompt = t["prompt_template"].format(data_summary=data_summary)
-                            
-                            response = model.generate_content([prompt, img])
-                            st.markdown(response.text)
-                            
-                        except Exception as e:
-                            st.error(f"AI Error: {e}")
+    try:
+        st.video(video_path)
+        
+        if st.button(t["btn_start"]):
+            with st.spinner(t["spinner_calc"]):
+                stats = process_video(video_path)
+                st.success(t["success_complete"])
+                
+                # Grafik Hazırlama
+                fig, ax = plt.subplots(figsize=(12, 5))
+                
+                has_squat = bool(stats["Squat"]["frames"])
+                has_pushup = bool(stats["Push-Up"]["frames"])
+                
+                if not has_squat and not has_pushup:
+                    st.error(t["detect_unknown"])
                 else:
-                    st.warning(t["warning_api"])
+                    if has_squat:
+                        ax.plot(stats["Squat"]["frames"], stats["Squat"]["angles"], label=t["exercise_names"]["Squat"], color='#007acc')
+                    if has_pushup:
+                        ax.plot(stats["Push-Up"]["frames"], stats["Push-Up"]["angles"], label=t["exercise_names"]["Push-Up"], color='#ff7f0e')
 
+                    ax.axhline(y=90, color='green', linestyle='--', label='Target (90°)')
+                    ax.set_title(t["chart_title"])
+                    ax.set_xlabel(t["chart_x"])
+                    ax.set_ylabel(t["chart_y"])
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    
+                    st.pyplot(fig)
+                    
+                    # OPTIMIERUNG: Grafik in BytesIO speichern statt auf Disk
+                    buf = io.BytesIO()
+                    plt.savefig(buf, format="png")
+                    buf.seek(0)
+                    img = Image.open(buf)
+                    
+                    # --- GEMINI ANALİZİ ---
+                    final_api_key = api_key_input
+                    if final_api_key:
+                        st.subheader(t["ai_header"])
+                        with st.spinner(t["spinner_ai"]):
+                            try:
+                                genai.configure(api_key=final_api_key)
+                                model = genai.GenerativeModel('gemini-2.0-flash')
+                                
+                                # Verileri Özetle
+                                data_summary = ""
+                                if has_squat:
+                                    # Sicherstellen, dass nicht durch 0 geteilt wird
+                                    count_sq = len(stats["Squat"]["min_angles"])
+                                    avg_depth = int(sum(stats["Squat"]["min_angles"])/count_sq) if count_sq > 0 else 0
+                                    data_summary += f"\n- {t['exercise_names']['Squat']}: {stats['Squat']['count']} {t['metric_reps']}. Avg Depth: {avg_depth}°."
+                                if has_pushup:
+                                    count_pu = len(stats["Push-Up"]["min_angles"])
+                                    avg_depth = int(sum(stats["Push-Up"]["min_angles"])/count_pu) if count_pu > 0 else 0
+                                    data_summary += f"\n- {t['exercise_names']['Push-Up']}: {stats['Push-Up']['count']} {t['metric_reps']}. Avg Depth: {avg_depth}°."
 
-
+                                prompt = t["prompt_template"].format(data_summary=data_summary)
+                                
+                                response = model.generate_content([prompt, img])
+                                st.markdown(response.text)
+                                
+                            except Exception as e:
+                                st.error(f"AI Error: {e}")
+                    else:
+                        st.warning(t["warning_api"])
+                        
+    finally:
+        # AUFRÄUMEN: Temporäre Videodatei löschen
+        if os.path.exists(video_path):
+            os.unlink(video_path)
