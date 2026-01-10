@@ -1,12 +1,12 @@
 import streamlit as st
 import cv2
-import mediapipe as mp
 import numpy as np
 import matplotlib.pyplot as plt
 import tempfile
 import google.generativeai as genai
 from PIL import Image
 import os
+from ultralytics import YOLO
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(
@@ -168,6 +168,15 @@ t = TRANSLATIONS[language]
 
 # --- BAŞLIK VE AÇIKLAMA ---
 st.title(t["title"])
+
+import streamlit as st
+import sys
+
+
+st.write(f"🐍 Python Sürümü: {sys.version}")
+st.write(f"📂 Python Yolu (Executable): {sys.executable}")
+
+
 st.markdown(t["desc"])
 
 # --- SIDEBAR (AYARLAR) ---
@@ -204,78 +213,107 @@ def detect_exercise_type(landmarks):
     return "Squat" if height > width else "Push-Up"
 
 def process_video(video_path):
-    mp_pose = mp.solutions.pose
-    pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-    cap = cv2.VideoCapture(video_path)
+    # 1. Modeli yükle (yolov8n-pose.pt en hızlısıdır, daha hassas istersen yolov8m-pose.pt kullan)
+    model = YOLO('yolov8n-pose.pt') 
     
     stats = {
-        "Squat": {"count": 0, "angles": [], "frames": [], "stage": None, "min_angles": []},
-        "Push-Up": {"count": 0, "angles": [], "frames": [], "stage": None, "min_angles": []}
+        "Squat": {"count": 0, "angles": [], "frames": [], "stage": "UP", "min_angles": []},
+        "Push-Up": {"count": 0, "angles": [], "frames": [], "stage": "UP", "min_angles": []}
     }
+    
+    cap = cv2.VideoCapture(video_path)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
     
     frame_count = 0
     progress_bar = st.progress(0)
     status_text = st.empty()
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if total_frames == 0: total_frames = 1
     
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
             
-        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(image)
+        # YOLO doğrudan BGR formatında çalışabilir, RGB dönüşümüne zorunlu gerek yoktur ama yapabiliriz.
+        # verbose=False terminal çıktısını temiz tutar
+        results = model(frame, verbose=False) 
         
-        try:
-            landmarks = results.pose_landmarks.landmark
-            current_exercise = detect_exercise_type(landmarks)
-            angle = 0
+        # İnsan algılandı mı kontrol et
+        if results[0].keypoints is not None and len(results[0].keypoints) > 0:
+            # İlk tespit edilen kişiyi al
+            keypoints = results[0].keypoints.xy[0].cpu().numpy() # [17, 2] formatında array döner
             
-            if current_exercise == "Squat":
-                p1 = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-                p2 = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-                p3 = [landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
-                angle = calculate_angle(p1, p2, p3)
+            # Eğer tüm noktalar (0,0) ise algılama yok demektir
+            if keypoints.shape[0] > 0:
+                current_exercise = detect_exercise_type_yolo(keypoints) # Bunu aşağıda tanımladım
                 
-                if angle > 160:
-                    stats["Squat"]["stage"] = "UP"
-                if angle < 90 and stats["Squat"]["stage"] == 'UP':
-                    stats["Squat"]["stage"] = "DOWN"
-                    stats["Squat"]["count"] += 1
-                    stats["Squat"]["min_angles"].append(int(angle))
-                
-                stats["Squat"]["angles"].append(angle)
-                stats["Squat"]["frames"].append(frame_count)
-            
-            elif current_exercise == "Push-Up":
-                p1 = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-                p2 = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x, landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-                p3 = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x, landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
-                angle = calculate_angle(p1, p2, p3)
-                
-                if angle > 160:
-                    stats["Push-Up"]["stage"] = "UP"
-                if angle < 90 and stats["Push-Up"]["stage"] == 'UP':
-                    stats["Push-Up"]["stage"] = "DOWN"
-                    stats["Push-Up"]["count"] += 1
-                    stats["Push-Up"]["min_angles"].append(int(angle))
-                
-                stats["Push-Up"]["angles"].append(angle)
-                stats["Push-Up"]["frames"].append(frame_count)
+                if current_exercise in stats:
+                    # --- YOLO (COCO) İndeksleri ---
+                    # 5: Sol Omuz, 7: Sol Dirsek, 9: Sol Bilek
+                    # 11: Sol Kalça, 13: Sol Diz, 15: Sol Ayak Bileği
+                    
+                    if current_exercise == "Squat":
+                        p1 = keypoints[11] # Sol Kalça
+                        p2 = keypoints[13] # Sol Diz
+                        p3 = keypoints[15] # Sol Ayak Bileği
+                    
+                    elif current_exercise == "Push-Up":
+                        p1 = keypoints[5] # Sol Omuz
+                        p2 = keypoints[7] # Sol Dirsek
+                        p3 = keypoints[9] # Sol Bilek
 
-        except:
-            pass
-            
+                    # Koordinatların güvenilirliğini kontrol et (0,0 olmamalı)
+                    if np.count_nonzero(p1) > 0 and np.count_nonzero(p2) > 0 and np.count_nonzero(p3) > 0:
+                        angle = calculate_angle(p1, p2, p3)
+                        
+                        ex_stats = stats[current_exercise]
+                        
+                        if angle > 160:
+                            ex_stats["stage"] = "UP"
+                        if angle < 90 and ex_stats["stage"] == 'UP':
+                            ex_stats["stage"] = "DOWN"
+                            ex_stats["count"] += 1
+                            ex_stats["min_angles"].append(int(angle))
+                        
+                        ex_stats["angles"].append(angle)
+                        ex_stats["frames"].append(frame_count)
+
         frame_count += 1
         if frame_count % 10 == 0:
             progress_bar.progress(min(frame_count / total_frames, 1.0))
-            status_text.text(f"Processing... Frame: {frame_count}")
+            status_text.text(f"İşleniyor... Frame: {frame_count}")
 
     cap.release()
     progress_bar.empty()
     status_text.empty()
     return stats
+
+# --- Yardımcı Fonksiyonlar ---
+
+def calculate_angle(a, b, c):
+    a = np.array(a)
+    b = np.array(b)
+    c = np.array(c)
+    
+    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+    angle = np.abs(radians*180.0/np.pi)
+    
+    if angle > 180.0:
+        angle = 360-angle
+    return angle
+
+def detect_exercise_type_yolo(kpts):
+    # Basit bir mantık: Eğer omuzlar kalçadan çok yukarıdaysa -> Squat (Ayakta)
+    # Eğer omuz ve kalça Y ekseninde yakınsa (yatay duruş) -> Push-Up
+    
+    # YOLO İndeksleri: Sol Omuz: 5, Sol Kalça: 11
+    shoulder_y = kpts[5][1]
+    hip_y = kpts[11][1]
+    
+    # Y koordinatı arttıkça aşağı inilir (görüntü işlemede 0,0 sol üsttür)
+    if hip_y - shoulder_y > 50: # Dikey mesafe fazlaysa ayakta duruyor
+        return "Squat"
+    else:
+        return "Push-Up"
 
 # --- HAUPTABLAUF ---
 uploaded_file = st.file_uploader(t["upload_label"], type=["mp4", "mov"])
@@ -322,7 +360,7 @@ if uploaded_file is not None:
                     with st.spinner(t["spinner_ai"]):
                         try:
                             genai.configure(api_key=final_api_key)
-                            model = genai.GenerativeModel('gemini-2.0-flash')
+                            model = genai.GenerativeModel('gemini-2.5-flash-lite')
                             img = Image.open("graph_detailed.png")
                             
                             # Verileri Özetle
@@ -344,7 +382,3 @@ if uploaded_file is not None:
                             st.error(f"AI Error: {e}")
                 else:
                     st.warning(t["warning_api"])
-
-
-
-
